@@ -3,6 +3,13 @@ Unitree go2 ROS 1 Drivers implemented using Python WebRTC interface
 
 This project enables a ROS interface that talks to the go2 through WebRTC and sends sport commands, and receives the camera and lidar data and publishes it out as ROS topics
 
+## Features
+
+joy_cmd_vel :white_check_mark: \
+urdf :white_check_mark: \
+lidar pointcloud \
+camera_stream \
+
 ## Getting started
 
 install ROS 1 with http://wiki.ros.org/noetic/Installation/Ubuntu
