@@ -6,14 +6,17 @@ import rospy
 import asyncio
 import json
 import os
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Joy
+import tf2_ros
+from geometry_msgs.msg import TransformStamped, Twist
+from sensor_msgs.msg import Joy, JointState
+from nav_msgs.msg import Odometry
 
 from go2_webrtc import Go2Connection, ROBOT_CMD, RTC_TOPIC
 from go2_driver.utilities import gen_mov_command, gen_command, gen_pose_command
 
 JOY_SENSITIVITY = 0.3
 ENABLE_BUTTON = 4
+
 
 class Go2BaseNode:
 
@@ -24,6 +27,9 @@ class Go2BaseNode:
         self._joy_state = Joy()
         self._cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self._cmd_vel_cb)
         self._joy_sub = rospy.Subscriber('joy', Joy, self._joy_cb)
+        self._joint_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
+        self._odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
+        self._tf_broadcaster = tf2_ros.TransformBroadcaster()
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -44,9 +50,12 @@ class Go2BaseNode:
         for topic in self.rtc_topic_subs:
             conn.data_channel.send(json.dumps({"type": "subscribe", "topic": topic}))
 
-    def on_data_channel_message(self, message, msgobj):
-        if msgobj.get('topic') == RTC_TOPIC['LF_SPORT_MOD_STATE']:
-            rospy.loginfo(f"Received multiple state: {message}")
+    def on_data_channel_message(self, _, msgobj):
+        if msgobj.get('topic') == RTC_TOPIC['LOW_STATE']:
+            self.publish_joint_state(msgobj)
+
+        if msgobj.get('topic') == RTC_TOPIC['ROBOTODOM']:
+            self.publish_odom(msgobj)
 
     async def run(self, conn):
 
@@ -62,28 +71,99 @@ class Go2BaseNode:
             if rospy.is_shutdown():
                 break
 
-            if self.robot_cmd_vel and stamp - self.robot_cmd_vel['stamp'] < rospy.Duration(0.2):
-                self._conn.publish(self.robot_cmd_vel['topic'], self.robot_cmd_vel['data'], self.robot_cmd_vel['type'])
-
-            if self._joy_state.header.stamp - stamp < rospy.Duration(0.2) and self._joy_state.buttons[ENABLE_BUTTON]:
-                pitch = self._joy_state.axes[4] * JOY_SENSITIVITY
-                pose_cmd = gen_pose_command(0.0, pitch, 0.0)
-                self._conn.publish(pose_cmd['topic'], pose_cmd['data'], pose_cmd['type'])
-
-            if self._joy_state.buttons[1]:
-                rospy.loginfo("Stand down")
-                stand_down_cmd = gen_command(ROBOT_CMD['StandDown'])
-                self._conn.publish(stand_down_cmd['topic'], stand_down_cmd['data'], stand_down_cmd['type'])
-
-            if self._joy_state.buttons[0]:
-                rospy.loginfo("Stand up")
-                stand_up_cmd = gen_command(ROBOT_CMD['StandUp'])
-                self._conn.publish(stand_up_cmd['topic'], stand_up_cmd['data'], stand_up_cmd['type'])
-                balance_stand_cmd = gen_command(ROBOT_CMD['BalanceStand'])
-                self._conn.publish(balance_stand_cmd['topic'], balance_stand_cmd['data'], balance_stand_cmd['type'])
+            self.joy_cmd(stamp)
 
             await asyncio.sleep(0.1)
 
+    def publish_odom(self, msg):
+
+        odom_msg = Odometry()
+        odom_msg.header.stamp = rospy.Time.now()
+        odom_msg.header.frame_id = 'odom'
+        odom_msg.child_frame_id = 'base'
+        odom_msg.pose.pose.position.x = msg['data']['pose']['position']['x']
+        odom_msg.pose.pose.position.y = msg['data']['pose']['position']['y']
+        odom_msg.pose.pose.position.z = msg['data']['pose']['position']['z']
+        odom_msg.pose.pose.orientation.x = msg['data']['pose']['orientation']['x']
+        odom_msg.pose.pose.orientation.y = msg['data']['pose']['orientation']['y']
+        odom_msg.pose.pose.orientation.z = msg['data']['pose']['orientation']['z']
+        odom_msg.pose.pose.orientation.w = msg['data']['pose']['orientation']['w']
+
+        self._odom_pub.publish(odom_msg)
+
+        # Publish transform
+        transform_stamped = TransformStamped()
+        transform_stamped.header.stamp = rospy.Time.now()
+        transform_stamped.header.frame_id = 'odom'
+        transform_stamped.child_frame_id = 'base_link'
+        transform_stamped.transform.translation.x = msg['data']['pose']['position']['x']
+        transform_stamped.transform.translation.y = msg['data']['pose']['position']['y']
+        transform_stamped.transform.translation.z = msg['data']['pose']['position']['z']
+        transform_stamped.transform.rotation.x = msg['data']['pose']['orientation']['x']
+        transform_stamped.transform.rotation.y = msg['data']['pose']['orientation']['y']
+        transform_stamped.transform.rotation.z = msg['data']['pose']['orientation']['z']
+        transform_stamped.transform.rotation.w = msg['data']['pose']['orientation']['w']
+
+        self._tf_broadcaster.sendTransform(transform_stamped)
+
+    def publish_joint_state(self, msg):
+        joint_state = JointState()
+        joint_state.header.stamp = rospy.Time.now()
+        FL_hip_joint = msg["data"]["motor_state"][0]["q"]
+        FL_thigh_joint = msg["data"]["motor_state"][1]["q"]
+        FL_calf_joint = msg["data"]["motor_state"][2]["q"]
+
+        FR_hip_joint = msg["data"]["motor_state"][3]["q"]
+        FR_thigh_joint = msg["data"]["motor_state"][4]["q"]
+        FR_calf_joint = msg["data"]["motor_state"][5]["q"]
+
+        RL_hip_joint = msg["data"]["motor_state"][6]["q"]
+        RL_thigh_joint = msg["data"]["motor_state"][7]["q"]
+        RL_calf_joint = msg["data"]["motor_state"][8]["q"]
+
+        RR_hip_joint = msg["data"]["motor_state"][9]["q"]
+        RR_thigh_joint = msg["data"]["motor_state"][10]["q"]
+        RR_calf_joint = msg["data"]["motor_state"][11]["q"]
+
+        joint_state.name = [
+            'FL_hip_joint', 'FL_thigh_joint', 'FL_calf_joint',
+            'FR_hip_joint', 'FR_thigh_joint', 'FR_calf_joint',
+            'RL_hip_joint', 'RL_thigh_joint', 'RL_calf_joint',
+            'RR_hip_joint', 'RR_thigh_joint', 'RR_calf_joint',
+            ]
+        joint_state.position = [
+            FL_hip_joint, FL_thigh_joint, FL_calf_joint,
+            FR_hip_joint, FR_thigh_joint, FR_calf_joint,
+            RL_hip_joint, RL_thigh_joint, RL_calf_joint,
+            RR_hip_joint, RR_thigh_joint, RR_calf_joint,
+            ]
+
+        self._joint_pub.publish(joint_state)
+
+    def joy_cmd(self, stamp):
+
+        if self.robot_cmd_vel and stamp - self.robot_cmd_vel['stamp'] < rospy.Duration(0.2):
+            self.publish_command(self.robot_cmd_vel)
+
+        if self._joy_state.header.stamp - stamp < rospy.Duration(0.2) and self._joy_state.buttons[ENABLE_BUTTON]:
+            pitch = self._joy_state.axes[4] * JOY_SENSITIVITY
+            pose_cmd = gen_pose_command(0.0, pitch, 0.0)
+            self.publish_command(pose_cmd)
+
+        if self._joy_state.buttons[1]:
+            rospy.loginfo("Stand down")
+            stand_down_cmd = gen_command(ROBOT_CMD['StandDown'])
+            self.publish_command(stand_down_cmd)
+
+        if self._joy_state.buttons[0]:
+            rospy.loginfo("Stand up")
+            stand_up_cmd = gen_command(ROBOT_CMD['StandUp'])
+            self.publish_command(stand_up_cmd)
+            balance_stand_cmd = gen_command(ROBOT_CMD['BalanceStand'])
+            self.publish_command(balance_stand_cmd)
+
+    def publish_command(self, cmd):
+        self._conn.publish(cmd['topic'], cmd['data'], cmd['type'])
 
 if __name__ == '__main__':
 

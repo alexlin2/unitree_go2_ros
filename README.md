@@ -6,9 +6,11 @@ This project enables a ROS interface that talks to the go2 through WebRTC and se
 ## Features
 
 joy_cmd_vel :white_check_mark: \
-urdf :white_check_mark: \
+urdf + state publisher:white_check_mark: \
+robot odom :white_check_mark: \
 lidar pointcloud \
 camera_stream \
+
 
 ## Getting started
 

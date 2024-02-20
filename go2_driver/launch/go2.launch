@@ -3,6 +3,8 @@
 
 <arg name="config_filepath" default="$(find go2_driver)/config/joy_twist.yaml" />
 
+<param name='robot_description' textfile="$(find go2_driver)/urdf/go2.urdf" />
+
 <node pkg="joy" type="joy_node" name="joy_node"
     output="screen">
     <param name="dev" value="/dev/input/js0" />
@@ -20,5 +22,14 @@
       output="screen">
     <remap from="cmd_vel" to="joy_cmd_vel" />
 </node>
+
+<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"
+    output="screen">
+</node>
+
+<node pkg="tf" type="static_transform_publisher" name="map_odom_broadcaster" args="0 0 0 0 0 0 map odom 20"/>
+
+<node name="$(anon system_rviz)" pkg="rviz" type="rviz"
+    args="-d $(find go2_driver)/config/rviz/go2.rviz" />
 
 </launch>
