@@ -12,7 +12,7 @@ from sensor_msgs.msg import Joy, JointState
 from nav_msgs.msg import Odometry
 
 from go2_webrtc import Go2Connection, ROBOT_CMD, RTC_TOPIC
-from go2_driver.utilities import gen_mov_command, gen_command, gen_pose_command
+from go2_driver.utilities import gen_mov_command, gen_command, gen_pose_command, xyz_foot_position_body_to_joint_angles
 
 JOY_SENSITIVITY = 0.3
 ENABLE_BUTTON = 4
@@ -30,6 +30,7 @@ class Go2BaseNode:
         self._joint_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
         self._odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster()
+        self._last_message_stamp = rospy.Time.now()
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -51,7 +52,7 @@ class Go2BaseNode:
             conn.data_channel.send(json.dumps({"type": "subscribe", "topic": topic}))
 
     def on_data_channel_message(self, _, msgobj):
-        if msgobj.get('topic') == RTC_TOPIC['LOW_STATE']:
+        if msgobj.get('topic') == RTC_TOPIC['LF_SPORT_MOD_STATE']:
             self.publish_joint_state(msgobj)
 
         if msgobj.get('topic') == RTC_TOPIC['ROBOTODOM']:
@@ -109,21 +110,29 @@ class Go2BaseNode:
     def publish_joint_state(self, msg):
         joint_state = JointState()
         joint_state.header.stamp = rospy.Time.now()
-        FL_hip_joint = msg["data"]["motor_state"][0]["q"]
-        FL_thigh_joint = msg["data"]["motor_state"][1]["q"]
-        FL_calf_joint = msg["data"]["motor_state"][2]["q"]
+        FL_x = msg["data"]["foot_position_body"][0]
+        FL_y = msg["data"]["foot_position_body"][1]
+        FL_z = msg["data"]["foot_position_body"][2]
 
-        FR_hip_joint = msg["data"]["motor_state"][3]["q"]
-        FR_thigh_joint = msg["data"]["motor_state"][4]["q"]
-        FR_calf_joint = msg["data"]["motor_state"][5]["q"]
+        FL_hip_joint, FL_thigh_joint, FL_calf_joint = xyz_foot_position_body_to_joint_angles(FL_x, FL_y, FL_z)
 
-        RL_hip_joint = msg["data"]["motor_state"][6]["q"]
-        RL_thigh_joint = msg["data"]["motor_state"][7]["q"]
-        RL_calf_joint = msg["data"]["motor_state"][8]["q"]
+        FR_x = msg["data"]["foot_position_body"][3]
+        FR_y = msg["data"]["foot_position_body"][4]
+        FR_z = msg["data"]["foot_position_body"][5]
 
-        RR_hip_joint = msg["data"]["motor_state"][9]["q"]
-        RR_thigh_joint = msg["data"]["motor_state"][10]["q"]
-        RR_calf_joint = msg["data"]["motor_state"][11]["q"]
+        FR_hip_joint, FR_thigh_joint, FR_calf_joint = xyz_foot_position_body_to_joint_angles(FR_x, FR_y, FR_z)
+
+        RL_x = msg["data"]["foot_position_body"][6]
+        RL_y = msg["data"]["foot_position_body"][7]
+        RL_z = msg["data"]["foot_position_body"][8]
+
+        RL_hip_joint, RL_thigh_joint, RL_calf_joint = xyz_foot_position_body_to_joint_angles(RL_x, RL_y, RL_z)
+
+        RR_x = msg["data"]["foot_position_body"][9]
+        RR_y = msg["data"]["foot_position_body"][10]
+        RR_z = msg["data"]["foot_position_body"][11]
+
+        RR_hip_joint, RR_thigh_joint, RR_calf_joint = xyz_foot_position_body_to_joint_angles(RR_x, RR_y, RR_z)
 
         joint_state.name = [
             'FL_hip_joint', 'FL_thigh_joint', 'FL_calf_joint',

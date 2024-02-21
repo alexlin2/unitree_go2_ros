@@ -9,7 +9,7 @@ joy_cmd_vel :white_check_mark: \
 urdf + state publisher:white_check_mark: \
 robot odom :white_check_mark: \
 lidar pointcloud \
-camera_stream \
+camera_stream 
 
 
 ## Getting started
