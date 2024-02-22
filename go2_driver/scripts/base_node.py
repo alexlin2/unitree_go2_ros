@@ -25,12 +25,14 @@ class Go2BaseNode:
         self._conn = None
         self.robot_cmd_vel = None
         self._joy_state = Joy()
+        self._joint_msg = None
         self._cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self._cmd_vel_cb)
         self._joy_sub = rospy.Subscriber('joy', Joy, self._joy_cb)
         self._joint_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
         self._odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster()
         self._last_message_stamp = rospy.Time.now()
+        self._joint_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~joint_pub_rate', 30)), self.publish_joint_state)
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -53,7 +55,7 @@ class Go2BaseNode:
 
     def on_data_channel_message(self, _, msgobj):
         if msgobj.get('topic') == RTC_TOPIC['LF_SPORT_MOD_STATE']:
-            self.publish_joint_state(msgobj)
+            self._joint_msg = msgobj
 
         if msgobj.get('topic') == RTC_TOPIC['ROBOTODOM']:
             self.publish_odom(msgobj)
@@ -107,32 +109,35 @@ class Go2BaseNode:
 
         self._tf_broadcaster.sendTransform(transform_stamped)
 
-    def publish_joint_state(self, msg):
+    def publish_joint_state(self, _):
+
+        if self._joint_msg is None:
+            return
         joint_state = JointState()
         joint_state.header.stamp = rospy.Time.now()
-        FL_x = msg["data"]["foot_position_body"][0]
-        FL_y = msg["data"]["foot_position_body"][1]
-        FL_z = msg["data"]["foot_position_body"][2]
+        FL_x = self._joint_msg["data"]["foot_position_body"][3]
+        FL_y = self._joint_msg["data"]["foot_position_body"][4]
+        FL_z = self._joint_msg["data"]["foot_position_body"][5]
 
-        FL_hip_joint, FL_thigh_joint, FL_calf_joint = xyz_foot_position_body_to_joint_angles(FL_x, FL_y, FL_z)
+        FL_hip_joint, FL_thigh_joint, FL_calf_joint = xyz_foot_position_body_to_joint_angles(FL_x, FL_y, FL_z, 0)
 
-        FR_x = msg["data"]["foot_position_body"][3]
-        FR_y = msg["data"]["foot_position_body"][4]
-        FR_z = msg["data"]["foot_position_body"][5]
+        FR_x = self._joint_msg["data"]["foot_position_body"][0]
+        FR_y = self._joint_msg["data"]["foot_position_body"][1]
+        FR_z = self._joint_msg["data"]["foot_position_body"][2]
 
-        FR_hip_joint, FR_thigh_joint, FR_calf_joint = xyz_foot_position_body_to_joint_angles(FR_x, FR_y, FR_z)
+        FR_hip_joint, FR_thigh_joint, FR_calf_joint = xyz_foot_position_body_to_joint_angles(FR_x, FR_y, FR_z, 1)
 
-        RL_x = msg["data"]["foot_position_body"][6]
-        RL_y = msg["data"]["foot_position_body"][7]
-        RL_z = msg["data"]["foot_position_body"][8]
+        RL_x = self._joint_msg["data"]["foot_position_body"][9]
+        RL_y = self._joint_msg["data"]["foot_position_body"][10]
+        RL_z = self._joint_msg["data"]["foot_position_body"][11]
 
-        RL_hip_joint, RL_thigh_joint, RL_calf_joint = xyz_foot_position_body_to_joint_angles(RL_x, RL_y, RL_z)
+        RL_hip_joint, RL_thigh_joint, RL_calf_joint = xyz_foot_position_body_to_joint_angles(RL_x, RL_y, RL_z, 2)
 
-        RR_x = msg["data"]["foot_position_body"][9]
-        RR_y = msg["data"]["foot_position_body"][10]
-        RR_z = msg["data"]["foot_position_body"][11]
+        RR_x = self._joint_msg["data"]["foot_position_body"][6]
+        RR_y = self._joint_msg["data"]["foot_position_body"][7]
+        RR_z = self._joint_msg["data"]["foot_position_body"][8]
 
-        RR_hip_joint, RR_thigh_joint, RR_calf_joint = xyz_foot_position_body_to_joint_angles(RR_x, RR_y, RR_z)
+        RR_hip_joint, RR_thigh_joint, RR_calf_joint = xyz_foot_position_body_to_joint_angles(RR_x, RR_y, RR_z, 3)
 
         joint_state.name = [
             'FL_hip_joint', 'FL_thigh_joint', 'FL_calf_joint',
