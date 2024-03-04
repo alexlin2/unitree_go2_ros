@@ -37,8 +37,8 @@ class Go2BaseNode:
         self._lidar_pub = rospy.Publisher('lidar', PointCloud2, queue_size=10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster()
         self._last_message_stamp = rospy.Time.now()
-        self._joint_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~joint_pub_rate', 30)), self.publish_joint_state)
-        self._lidar_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~lidar_pub_rate', 5)), self.publish_lidar)
+        self._joint_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~joint_pub_rate', 10)), self.publish_joint_state)
+        self._lidar_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~lidar_pub_rate', 2)), self.publish_lidar)
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -60,6 +60,7 @@ class Go2BaseNode:
             conn.data_channel.send(json.dumps({"type": "subscribe", "topic": topic}))
 
     def on_data_channel_message(self, _, msgobj):
+
         if msgobj.get('topic') == RTC_TOPIC['LF_SPORT_MOD_STATE']:
             self._joint_msg = msgobj
 
@@ -210,6 +211,7 @@ class Go2BaseNode:
 
     def publish_command(self, cmd):
         self._conn.publish(cmd['topic'], cmd['data'], cmd['type'])
+
 
 if __name__ == '__main__':
 
