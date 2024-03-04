@@ -4,7 +4,8 @@
 
 import json
 import numpy as np
-from go2_webrtc import Go2Connection, ROBOT_CMD, RTC_TOPIC
+from go2_driver.webrtc_driver import Go2Connection
+from go2_driver.constants import ROBOT_CMD, RTC_TOPIC
 from geometry_msgs.msg import Vector3
 
 # joint lengths from urdf

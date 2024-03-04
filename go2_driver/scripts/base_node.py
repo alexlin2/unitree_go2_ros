@@ -7,12 +7,15 @@ import asyncio
 import json
 import os
 import tf2_ros
+import sensor_msgs.point_cloud2 as pc2
 from geometry_msgs.msg import TransformStamped, Twist
-from sensor_msgs.msg import Joy, JointState
+from sensor_msgs.msg import Joy, JointState, PointCloud2, PointField
 from nav_msgs.msg import Odometry
 
-from go2_webrtc import Go2Connection, ROBOT_CMD, RTC_TOPIC
+from go2_driver.webrtc_driver import Go2Connection
+from go2_driver.constants import ROBOT_CMD, RTC_TOPIC
 from go2_driver.utilities import gen_mov_command, gen_command, gen_pose_command, xyz_foot_position_body_to_joint_angles
+from go2_driver.lidar_decoder import update_meshes_for_cloud2
 
 JOY_SENSITIVITY = 0.3
 ENABLE_BUTTON = 4
@@ -26,13 +29,16 @@ class Go2BaseNode:
         self.robot_cmd_vel = None
         self._joy_state = Joy()
         self._joint_msg = None
+        self._lidar_msg = None
         self._cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self._cmd_vel_cb)
         self._joy_sub = rospy.Subscriber('joy', Joy, self._joy_cb)
         self._joint_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
         self._odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
+        self._lidar_pub = rospy.Publisher('lidar', PointCloud2, queue_size=10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster()
         self._last_message_stamp = rospy.Time.now()
         self._joint_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~joint_pub_rate', 30)), self.publish_joint_state)
+        self._lidar_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~lidar_pub_rate', 5)), self.publish_lidar)
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -60,11 +66,14 @@ class Go2BaseNode:
         if msgobj.get('topic') == RTC_TOPIC['ROBOTODOM']:
             self.publish_odom(msgobj)
 
+        if msgobj.get('topic') == RTC_TOPIC["ULIDAR_ARRAY"]:
+            self._lidar_msg = msgobj
+
     async def run(self, conn):
 
         self._conn = conn
 
-        await self._conn.connect_robot()
+        await self._conn.connect()
         rospy.loginfo("Connected to Go2 !!!")
 
         while True:
@@ -77,6 +86,29 @@ class Go2BaseNode:
             self.joy_cmd(stamp)
 
             await asyncio.sleep(0.1)
+
+    def publish_lidar(self, _):
+        if self._lidar_msg is None:
+            return
+        cloud = PointCloud2()
+        cloud.header.stamp = rospy.Time.now()
+        cloud.header.frame_id = 'odom'
+        points = update_meshes_for_cloud2(
+                self._lidar_msg["decoded_data"]["positions"],
+                self._lidar_msg["decoded_data"]["uvs"],
+                self._lidar_msg['data']['resolution'],
+                self._lidar_msg['data']['origin'],
+                0
+                )
+
+        fields = [
+                PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+                PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+                PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+                PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+            ]
+        cloud = pc2.create_cloud(cloud.header, fields, points)
+        self._lidar_pub.publish(cloud)
 
     def publish_odom(self, msg):
 
