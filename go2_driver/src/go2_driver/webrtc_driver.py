@@ -65,7 +65,7 @@ class Go2Connection():
         self.audio_track = MediaBlackhole()
         self.video_track = MediaBlackhole()
         
-        self.data_channel = self.pc.createDataChannel("data", id=0)
+        self.data_channel = self.pc.createDataChannel("data", id=2, negotiated=False)
         self.data_channel.on("open", self.on_data_channel_open)
         self.data_channel.on("message", self.on_data_channel_message)
         

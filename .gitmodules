@@ -1,3 +1,6 @@
 [submodule "go2-webrtc"]
 	path = go2-webrtc
 	url = https://github.com/tfoldi/go2-webrtc.git
+[submodule "go2webrtc-rs"]
+	path = go2webrtc-rs
+	url = https://github.com/tfoldi/go2webrtc-rs

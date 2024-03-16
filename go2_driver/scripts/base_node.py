@@ -30,6 +30,7 @@ class Go2BaseNode:
         self._joy_state = Joy()
         self._joint_msg = None
         self._lidar_msg = None
+        self._odom_msg = None
         self._cmd_vel_sub = rospy.Subscriber('cmd_vel', Twist, self._cmd_vel_cb)
         self._joy_sub = rospy.Subscriber('joy', Joy, self._joy_cb)
         self._joint_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
@@ -39,6 +40,7 @@ class Go2BaseNode:
         self._last_message_stamp = rospy.Time.now()
         self._joint_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~joint_pub_rate', 10)), self.publish_joint_state)
         self._lidar_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~lidar_pub_rate', 2)), self.publish_lidar)
+        self._odom_pub_timer = rospy.Timer(rospy.Duration(1.0 / rospy.get_param('~odom_pub_rate', 10)), self.publish_odom)
 
         self.rtc_topic_subs = RTC_TOPIC.values()
 
@@ -65,7 +67,7 @@ class Go2BaseNode:
             self._joint_msg = msgobj
 
         if msgobj.get('topic') == RTC_TOPIC['ROBOTODOM']:
-            self.publish_odom(msgobj)
+            self._odom_msg = msgobj
 
         if msgobj.get('topic') == RTC_TOPIC["ULIDAR_ARRAY"]:
             self._lidar_msg = msgobj
@@ -111,19 +113,20 @@ class Go2BaseNode:
         cloud = pc2.create_cloud(cloud.header, fields, points)
         self._lidar_pub.publish(cloud)
 
-    def publish_odom(self, msg):
-
+    def publish_odom(self, _):
+        if self._odom_msg is None:
+            return
         odom_msg = Odometry()
         odom_msg.header.stamp = rospy.Time.now()
         odom_msg.header.frame_id = 'odom'
         odom_msg.child_frame_id = 'base'
-        odom_msg.pose.pose.position.x = msg['data']['pose']['position']['x']
-        odom_msg.pose.pose.position.y = msg['data']['pose']['position']['y']
-        odom_msg.pose.pose.position.z = msg['data']['pose']['position']['z']
-        odom_msg.pose.pose.orientation.x = msg['data']['pose']['orientation']['x']
-        odom_msg.pose.pose.orientation.y = msg['data']['pose']['orientation']['y']
-        odom_msg.pose.pose.orientation.z = msg['data']['pose']['orientation']['z']
-        odom_msg.pose.pose.orientation.w = msg['data']['pose']['orientation']['w']
+        odom_msg.pose.pose.position.x = self._odom_msg['data']['pose']['position']['x']
+        odom_msg.pose.pose.position.y = self._odom_msg['data']['pose']['position']['y']
+        odom_msg.pose.pose.position.z = self._odom_msg['data']['pose']['position']['z']
+        odom_msg.pose.pose.orientation.x = self._odom_msg['data']['pose']['orientation']['x']
+        odom_msg.pose.pose.orientation.y = self._odom_msg['data']['pose']['orientation']['y']
+        odom_msg.pose.pose.orientation.z = self._odom_msg['data']['pose']['orientation']['z']
+        odom_msg.pose.pose.orientation.w = self._odom_msg['data']['pose']['orientation']['w']
 
         self._odom_pub.publish(odom_msg)
 
@@ -132,13 +135,13 @@ class Go2BaseNode:
         transform_stamped.header.stamp = rospy.Time.now()
         transform_stamped.header.frame_id = 'odom'
         transform_stamped.child_frame_id = 'base_link'
-        transform_stamped.transform.translation.x = msg['data']['pose']['position']['x']
-        transform_stamped.transform.translation.y = msg['data']['pose']['position']['y']
-        transform_stamped.transform.translation.z = msg['data']['pose']['position']['z']
-        transform_stamped.transform.rotation.x = msg['data']['pose']['orientation']['x']
-        transform_stamped.transform.rotation.y = msg['data']['pose']['orientation']['y']
-        transform_stamped.transform.rotation.z = msg['data']['pose']['orientation']['z']
-        transform_stamped.transform.rotation.w = msg['data']['pose']['orientation']['w']
+        transform_stamped.transform.translation.x = self._odom_msg['data']['pose']['position']['x']
+        transform_stamped.transform.translation.y = self._odom_msg['data']['pose']['position']['y']
+        transform_stamped.transform.translation.z = self._odom_msg['data']['pose']['position']['z']
+        transform_stamped.transform.rotation.x = self._odom_msg['data']['pose']['orientation']['x']
+        transform_stamped.transform.rotation.y = self._odom_msg['data']['pose']['orientation']['y']
+        transform_stamped.transform.rotation.z = self._odom_msg['data']['pose']['orientation']['z']
+        transform_stamped.transform.rotation.w = self._odom_msg['data']['pose']['orientation']['w']
 
         self._tf_broadcaster.sendTransform(transform_stamped)
 
@@ -192,7 +195,7 @@ class Go2BaseNode:
         if self.robot_cmd_vel and stamp - self.robot_cmd_vel['stamp'] < rospy.Duration(0.2):
             self.publish_command(self.robot_cmd_vel)
 
-        if self._joy_state.header.stamp - stamp < rospy.Duration(0.2) and self._joy_state.buttons[ENABLE_BUTTON]:
+        if self._joy_state.header.stamp - stamp < rospy.Duration(0.2):
             pitch = self._joy_state.axes[4] * JOY_SENSITIVITY
             pose_cmd = gen_pose_command(0.0, pitch, 0.0)
             self.publish_command(pose_cmd)

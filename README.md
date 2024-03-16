@@ -9,7 +9,7 @@ joy_cmd_vel :white_check_mark: \
 urdf + state publisher :white_check_mark: \
 robot odom :white_check_mark: \
 lidar pointcloud :white_check_mark: \
-camera_stream 
+camera_stream :white_check_mark:
 
 
 ## Getting started
@@ -35,8 +35,16 @@ launch go2_base_node
 roslaunch go2_driver go2.launch
 ```
 
-Connect XBOX controller and enjoy
+In another terminal:
 
+```
+cd go2webrtc-rs
+cargo build
+./target/debug/go2webrtc-rc  --robot 192.168.12.1
+python go2cv.py
+```
+
+Connect XBOX controller and have fun
 
 # Thanks
 
