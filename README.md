@@ -48,6 +48,6 @@ Connect XBOX controller and have fun
 
 # Thanks
 
-Special thanks to tfoldi for his work on the WebRTC interface
+Special thanks to tfoldi for his work on the WebRTC interface and Brimo for joint states and urdf
 
 # License 
